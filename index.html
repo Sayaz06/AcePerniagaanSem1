@@ -215,7 +215,7 @@ importInput.onchange=evt=>{
 exportBtn.onclick=()=>{
     const blob=new Blob([JSON.stringify(treeToJson(notesContainer),null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download='a.json'; a.click(); URL.revokeObjectURL(url);
+    const a=document.createElement('a'); a.href=url; a.download='AcePerniagaan1.json'; a.click(); URL.revokeObjectURL(url);
 }
 
 /* ---------- CLEAR ---------- */
