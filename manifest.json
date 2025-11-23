@@ -1,0 +1,13 @@
+{
+  "short_name": "SubjekNota", // <----
+  "name": "SubjekNota - Aplikasi Nota Hierarki", // <----
+  "icons": [
+    { "src": "Perniagaanicon-192.png", "sizes": "192x192", "type": "image/png" }, // <----
+    { "src": "Perniagaanicon-512.png", "sizes": "512x512", "type": "image/png" } // <----
+  ],
+  "start_url": "index.html",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary"
+}
