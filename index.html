@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubjekNota</title> <!-- ← tukar tajuk browser -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="Perniagaanicon-192.png"> <!-- ← tukar icon app -->
+
+<style>
+body { font-family:sans-serif; margin:20px; background:#f4f4f9; }
+.container { max-width:900px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1);}
+.header-controls { display:flex; gap:10px; margin-bottom:20px; justify-content:flex-end;}
+button { padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;}
+#add-title-btn { background:#007bff; color:#fff; margin-bottom:20px;}
+.delete-btn { background:#dc3545; color:#fff; margin-left:10px;}
+.subject-entry { border:1px solid #ddd; margin-bottom:15px; padding:15px; border-radius:6px; transition:all .3s; color:#333; }
+.title-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.title-controls { display:flex; gap:5px; }
+.title-text { font-size:1.1em; font-weight:bold; cursor:text; padding:5px; flex-grow:1; margin-right:10px; outline:none; }
+.notes-area { display:flex; gap:15px; margin-top:10px; }
+.note-section { flex:1; }
+.textarea-wrapper { position: relative; width:100%; margin-bottom:15px; }
+textarea { width:100%; min-height:100px; padding:10px; resize:none; box-sizing:border-box; border:1px solid #aaa; border-radius:4px; font-size:15px; }
+.drag-handle { position:absolute; width:40px; height:40px; right:0; bottom:0; cursor:se-resize; background:rgba(0,0,0,0.25); border-radius:6px; touch-action:none;}
+.children-container { padding-left:20px; }
+.muted { opacity:.8; font-size:.9em; color:#555; margin-left:8px; }
+.import-file-input { display:none; }
+
+.level-1 { background:#e0f7fa; border-left:5px solid #00acc1; }
+.level-2 { background:#b3e5fc; border-left:5px solid #0288d1; }
+.level-3 { background:#c8e6c9; border-left:5px solid #43a047; }
+.level-4 { background:#fff9c4; border-left:5px solid #fbc02d; }
+.level-5 { background:#ffe0b2; border-left:5px solid #fb8c00; }
+.level-6 { background:#ffccbc; border-left:5px solid #e64a19; }
+.level-7 { background:#ffcdd2; border-left:5px solid #d32f2f; }
+.level-8 { background:#e1bee7; border-left:5px solid #8e24aa; }
+.level-9 { background:#3e2723; border-left:5px solid #795548; color:white; }
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>📚 SubjekNota</h1>
+
+<div class="header-controls">
+<input id="import-json" type="file" accept="application/json" class="import-file-input">
+<button id="import-json-btn">📥 Import JSON</button>
+<button id="export-json-btn">📤 Export JSON</button>
+<button id="clear-all-btn" style="background:#ff8c00;color:#fff">🧹 Kosongkan</button>
+</div>
+
+<hr>
+
+<button id="add-title-btn">➕ Tambah Tajuk</button>
+<div id="notes-container" class="children-container"></div>
+<p class="muted">Semua data disimpan dalam localStorage & boleh digunakan offline.</p>
+</div>
+
+<script>
+const notesContainer=document.getElementById('notes-container');
+const addTitleBtn=document.getElementById('add-title-btn');
+const exportBtn=document.getElementById('export-json-btn');
+const importInput=document.getElementById('import-json');
+const importBtn=document.getElementById('import-json-btn');
+const clearBtn=document.getElementById('clear-all-btn');
+
+/* ---------- CREATE ENTRY ---------- */
+function createSubjectEntry(level, numbering, titleText='', bmNote='', otherNote=''){
+    const entry=document.createElement('div');
+    entry.className=`subject-entry level-${level}`;
+    entry.dataset.level=level;
+    entry.dataset.numbering=numbering;
+
+    const titleLabel=document.createElement('div');
+    titleLabel.className='title-text'; titleLabel.contentEditable=true;
+    titleLabel.innerText=titleText || (level===1?'Tajuk Besar Baru':'Subtopik Baru Peringkat '+level); // ← auto numbering dihapus
+
+    const titleBar=document.createElement('div'); titleBar.className='title-bar';
+    const controls=document.createElement('div'); controls.className='title-controls';
+    const addSubBtn=document.createElement('button'); addSubBtn.className='add-subtopic-btn'; addSubBtn.textContent='➕ Subtopik';
+    addSubBtn.dataset.level=level;
+    const delBtn=document.createElement('button'); delBtn.className='delete-btn'; delBtn.textContent='❌ Padam';
+    controls.appendChild(addSubBtn); controls.appendChild(delBtn);
+    titleBar.appendChild(titleLabel); titleBar.appendChild(controls);
+    entry.appendChild(titleBar);
+
+    if(level>1){
+        const notes=document.createElement('div'); notes.className='notes-area';
+        notes.innerHTML=`
+        <div class="note-section">
+            <label>Nota (BM):</label>
+            <div class="textarea-wrapper">
+                <textarea class="bm-note">${bmNote}</textarea>
+                <div class="drag-handle"></div>
+            </div>
+        </div>
+        <div class="note-section">
+            <label>Nota (Bahasa Kedua):</label>
+            <div class="textarea-wrapper">
+                <textarea class="other-note">${otherNote}</textarea>
+                <div class="drag-handle"></div>
+            </div>
+        </div>`;
+        entry.appendChild(notes);
+    }
+
+    const childContainer=document.createElement('div'); childContainer.className='children-container';
+    entry.appendChild(childContainer);
+
+    entry.querySelectorAll('textarea').forEach(t=>t.addEventListener('input',saveToLocal));
+    titleLabel.addEventListener('blur',saveToLocal);
+    return entry;
+}
+
+/* ---------- DRAG HANDLE ---------- */
+function setupResizeHandles(){
+    document.querySelectorAll('.textarea-wrapper').forEach(wrapper=>{
+        const textarea=wrapper.querySelector('textarea');
+        const handle=wrapper.querySelector('.drag-handle');
+        let resizing=false,startX,startY,startW,startH;
+        handle.addEventListener('pointerdown',e=>{
+            e.preventDefault(); resizing=true;
+            startX=e.clientX; startY=e.clientY;
+            startW=textarea.offsetWidth; startH=textarea.offsetHeight;
+            handle.setPointerCapture(e.pointerId);
+        });
+        handle.addEventListener('pointermove',e=>{
+            if(!resizing)return;
+            textarea.style.width=(startW+(e.clientX-startX))+'px';
+            textarea.style.height=(startH+(e.clientY-startY))+'px';
+        });
+        handle.addEventListener('pointerup',e=>{resizing=false; handle.releasePointerCapture(e.pointerId);});
+    });
+}
+
+/* ---------- NUMBERING ---------- */
+function updateNumbering(container,prefix=''){
+    [...container.children].filter(c=>c.classList.contains('subject-entry')).forEach((c,i)=>{
+        const num=prefix?prefix+'.'+(i+1):String(i+1);
+        c.dataset.numbering=num;
+        const titleEl=c.querySelector('.title-text');
+        const text=titleEl.innerText.replace(/^\d+(\.\d+)*\.\s*/,'');
+        titleEl.innerText=num+'. '+text;
+        updateNumbering(c.querySelector('.children-container'),num);
+    });
+}
+
+/* ---------- SAVE / LOAD ---------- */
+function treeToJson(container){return [...container.children].filter(c=>c.classList.contains('subject-entry')).map(c=>({
+    level:Number(c.dataset.level),
+    numbering:c.dataset.numbering,
+    title:c.querySelector('.title-text').innerText,
+    bm:c.querySelector('.bm-note')?.value||'',
+    other:c.querySelector('.other-note')?.value||'',
+    children:treeToJson(c.querySelector('.children-container'))
+}));}
+
+function jsonToTree(arr,container){arr.forEach(item=>{
+    const cleanTitle = item.title.replace(/^\d+(\.\d+)*\.\s*/,''); // ← untuk import JSON, elak double nombor
+    const entry=createSubjectEntry(item.level,item.numbering,cleanTitle,item.bm,item.other);
+    container.appendChild(entry);
+    if(item.children?.length) jsonToTree(item.children,entry.querySelector('.children-container'));
+}); setupResizeHandles(); }
+
+function saveToLocal(){localStorage.setItem('subjek-nota-data',JSON.stringify(treeToJson(notesContainer)));}
+function loadFromLocal(){const raw=localStorage.getItem('subjek-nota-data'); if(!raw) return; notesContainer.innerHTML=''; jsonToTree(JSON.parse(raw),notesContainer); updateNumbering(notesContainer);}
+
+/* ---------- EVENTS ---------- */
+addTitleBtn.onclick=()=>{notesContainer.appendChild(createSubjectEntry(1,'','Tajuk Baru')); updateNumbering(notesContainer); setupResizeHandles();}
+
+notesContainer.onclick=e=>{
+    const target=e.target;
+    if(target.classList.contains('add-subtopic-btn')){
+        const parent=target.closest('.subject-entry');
+        const level=Number(parent.dataset.level); if(level>=9){alert('Maksimum 9 peringkat!'); return;}
+        const childContainer=parent.querySelector('.children-container');
+        childContainer.appendChild(createSubjectEntry(level+1,'','Subtopik Baru')); // ← auto numbering dibuang
+        updateNumbering(notesContainer);
+        setupResizeHandles();
+    }
+    if(target.classList.contains('delete-btn')){
+        if(confirm('Padam entri ini beserta subtopik?')){
+            target.closest('.subject-entry').remove();
+            updateNumbering(notesContainer);
+            saveToLocal();
+        }
+    }
+}
+
+/* ---------- IMPORT / EXPORT ---------- */
+importBtn.onclick=()=>importInput.click();
+importInput.onchange=evt=>{
+    const file=evt.target.files[0]; if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+        try{
+            const json=JSON.parse(e.target.result);
+            notesContainer.innerHTML='';
+            jsonToTree(json,notesContainer);
+            updateNumbering(notesContainer);
+            saveToLocal();
+            setupResizeHandles();
+            alert('Import berjaya!');
+        }catch(err){alert('Fail JSON tidak sah! '+err.message);}
+    };
+    reader.readAsText(file);
+    evt.target.value='';
+}
+
+exportBtn.onclick=()=>{
+    const blob=new Blob([JSON.stringify(treeToJson(notesContainer),null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='AcePerniagaan1.json'; a.click(); URL.revokeObjectURL(url); // <--- tukar nama file manifest
+}
+
+/* ---------- CLEAR ---------- */
+clearBtn.onclick=()=>{if(confirm('Kosongkan semua nota?')){notesContainer.innerHTML=''; localStorage.removeItem('subjek-nota-data');}}
+
+/* ---------- INIT ---------- */
+loadFromLocal();
+setupResizeHandles();
+
+/* ---------- SERVICE WORKER ---------- */
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js'); // <---
+</script>
+
+</body>
+</html>
